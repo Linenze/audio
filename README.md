@@ -5,7 +5,7 @@ Jquery audio plugin, his only 2kb;
 ## Installation
 
 1. `you can click download`
-2. Include `ES6query` in your HTML.
+2. Include `audio` in your HTML.
 
     ```html
     <script src="jquery.js"></script>
