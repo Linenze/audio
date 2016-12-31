@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>asdasd</title>
+    <button id="btn"> load new</button>
+    <button id="btn2">currentTime 88</button>
+    <button id="btn3">暂停</button>
+    <button id="btn4">音量调到0.2</button>
+    <button id="btn5">音量切换</button>
+</head>
+<body>
+
+<!-- 引入 jquery 文件-->
+<script src="js/jquery.min.js"></script>
+<!-- 引入 audio 文件-->
+<script src="dest/audio.js"></script>
+<script>
+    var a = $.fn.audio({
+        ended:function (url) {
+            alert(url);
+        },
+        interval:1000,
+        watch:function(obj){
+            console.log(obj);
+        }
+    });
+    a.load('inc/1.mp3',function(){
+       //todo 加载完成后
+    },true);
+
+    var btn = document.getElementById('btn');
+    btn.onclick = function(){
+        a.load('inc/2.mp3',function(){
+            console.log('加载完成,马上执行播放');
+        },true);
+    }
+    var btn2 = document.getElementById('btn2');
+    btn2.onclick = function(){
+        console.log(a.currentTime(90,true));
+    }
+    var btn3 = document.getElementById('btn3');
+    btn3.onclick = function(){
+        a.togglePlay();
+    }
+    var btn4 = document.getElementById('btn4');
+    btn4.onclick = function(){
+        a.volume(0.2);
+    }
+    var btn5 = document.getElementById('btn5');
+    btn5.onclick = function(){
+        a.toggleMute(function(data){
+            console.log(data);
+        });
+    }
+</script>
+</body>
+</html>
