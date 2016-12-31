@@ -1,4 +1,4 @@
-# ES6Query
+# Jquery Audio
 
 Jquery audio plugin, his only 2kb;
 
