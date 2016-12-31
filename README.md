@@ -1,6 +1,6 @@
 # Jquery Audio
 
-Jquery audio plugin, his only 2kb;
+Jquery audio plugin, his only 1.32kb;
 
 ## Installation
 
