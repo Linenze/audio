@@ -1,3 +1,8 @@
+/*!
+ audio.js for jQuery v1.11
+ (c) 2006-2013 buff <https://github.com/buff2017>
+ MIT-style license.
+ */
 /**
  * 音乐播放器
  * 调用方法:
