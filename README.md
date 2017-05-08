@@ -1,6 +1,6 @@
 # audio.js
 
-一个小巧的jquery插件, 仅2.16kb
+一个小巧的jquery插件, 仅2.32kb
 
 ## 使用
 
