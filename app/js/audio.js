@@ -1,179 +1,185 @@
 /*!
- audio.js for jQuery v1.11
- (c) 2006-2013 buff <https://github.com/buff2017>
+ audio.js plugin for jQuery v3.2.1 by Buff
+ (c) 2016-2017 Buff <https://github.com/buff2017>
  MIT-style license.
  */
-/**
- * 音乐播放器
- * 调用方法:
- *          var audio = $.fn.audio({
- *              interval:1000,//定时器监听事件,默认为200
- *              watch:function(obj){},//监听方法 返回一个对象里面包含常用的数据,包括百分比进度
- *              ended:function(url){}//每当音频执行完毕后触发该函数 返回一个当前播放的url地址
- *          });
- *
- *          通过插件返回的一个对象,可以从刚刚定义的变量 audio中获得一些方法 注:这里的audio是上面定义的变量audio
- *          audio.audio //当前audio对象
- *          audio.load(url,callback,autoplay) //加载函数 接收3个参数 url 音频地址 , callback 加载完成后回调函数 , autoplay 是否自动播放
- *          audio.pause() //暂停
- *          audio.play() //播放
- *          audio.togglePlay(callback(isChangedPlay)) //切换暂停播放函数 , 接受一个回调 isChangedPlay 看名知其意
- *          audio.currentTime(num, percentage) //若不设置参数,将会返回当前帧数 , num 设置当前帧(num/s) ; percentage若为true 则按百分比设置 num 充当百分比 比如 num = 80 就是百分之80的进度
- *          audio.volume(num, percentage) //设置音量 同上
- *          audio.mute() //静音
- *          audio.unMute() //取消静音
- *          audio.toggleMute(callback(isChangedMute)) //切换静音 同 audio.togglePlay(callback(isChangedPlay))
- */
-;(function () {
-    $.fn.extend({
-        audio: function (json) {
-            var options = json ? json : {};
-            var audio;
-            var timer;//开个定时器
-            //定时器监听时间获取
-            var intervalNum = options.interval || 200;
-            var watchCallback = options.watch || null;
-            var beforTime;//记录上一次定时器的时间 为了解决站暂停后出问题
-            var beforMute;//记录点击静音之前的值,为了在关闭静音时能恢复之前的音量
-            var tool = (function () {
-                return {
-                    percentage: function (a, b) {//获取百分比
-                        return Math.ceil((Math.trunc(a) / Math.trunc(b)) * 100);
-                    }
-                }
-            })();
-            //定时器监听方法
-            var intervalFn = function () {
-                if (!audio.duration) {
-                    window.clearInterval(timer);
-                }
-                ;
-                watchCallback({
-                    currentTime: audio.currentTime,//当前帧数
-                    duration: audio.duration || 0,//总长度
-                    ended: audio.ended,//是否已经结束
-                    loop: audio.loop,//是否循环
-                    muted: audio.muted,//返回当前是否静音
-                    paused: audio.paused,//返回当前是否暂停
-                    volume: audio.volume,//返回当前音量
-                    percentage: tool.percentage(audio.currentTime || beforTime, audio.duration) || 0
-                });
-                beforTime = currentTime;
-            };
+~(function(w,$){
+	"use strict";
+	var _this
+	function audio(options){
+		var defaults = {
+			src:'',               //  防报错
+			autoPlay:true,        //  默认自动播放
+			frequency:200,        //  音频默认监听频率
+		}
+		_this = this
 
-            //初始化方法
-            var init = function () {
-                audio = new Audio();
-                event();
-            }
+		this.audio = new Audio()
+		this.canplay = false	
+		
+		//  保存当前音量,用于unMute方法使用
+		this.beforMute = 1
+		this.options = $.extend(defaults,options)
 
-            //绑定一些事件
-            var event = function () {
-                var endCallBack = function () {
-                    options.ended && options.ended(audio.src);
-                }
-                audio.addEventListener('ended', endCallBack, false);
-            }
+		this.init()
+		this.loadAudio(this.options.src,this.options.autoPlay)
+		
+		//  赋值全局方法
+		w.audioMethod = {
+			play:_this.play,
+			pause:_this.pause,
+			togglePlay:_this.togglePlay,
+			volume:_this.volume,
+			mute:_this.mute,
+			unMute:_this.unMute,
+			toggleMute:_this.toggleMute,
+			loadAudio:_this.loadAudio,
+			currentTime:_this.currentTime
+		}
+	}
 
-            //加载方法
-            var load = function (url, callback, autoplay) {
-                var fn = function () {
-                    if (callback && typeof callback !== 'function') {//load(url,true)
-                        audio.play();
-                    } else {
-                        callback && callback();
-                        autoplay && audio.play();
-                    }
-                    //加载完成后开启定时器
-                    window.clearInterval(timer);
-                    timer = setInterval(intervalFn, intervalNum);
-                    audio.removeEventListener('loadeddata', fn, false);
-                }
-                audio.src = url;
-                audio.load();
-                audio.addEventListener('loadeddata', fn, false)
-            };
-            //播放
-            var play = function () {
-                audio.play();
-                window.clearInterval(timer);
-                timer = setInterval(intervalFn, intervalNum);
-            };
-            //暂停
-            var pause = function () {
-                audio.pause();
-                window.clearInterval(timer);
-            };
-            //暂停播放切换
-            var togglePlay = function (callback) {
-                if (audio.paused) {
-                    play();
-                    callback && callback(true);
-                } else {
-                    pause();
-                    callback && callback(false);
-                }
-            }
-            //音量调节
-            var volume = function (num, percentage) {
-                if (!num)return audio.volume;
-                if (percentage) {
-                    audio.volume = num / 100;
-                } else {
-                    audio.volume = num;
-                }
-                return;
-            }
-            //静音
-            var mute = function () {
-                beforMute = audio.volume;
-                audio.volume = 0;
-            }
-            //关闭静音
-            var unMute = function () {
-                audio.volume = beforMute ? beforMute : 1;
-            }
-            //切换静音 返回一个布尔 切换成关闭静音true 切换成静音 false
-            var toggleMute = function (callback) {
-                if (audio.volume == 0) {//已经是静音状态
-                    unMute();
-                    callback && callback(true);
-                } else {
-                    mute();
-                    callback && callback(false);
-                }
-            }
+	var ap = audio.prototype
 
-            /**
-             * 设置当前播放时间
-             * @param num           通过设置秒数来获取
-             * @param percentage    如果为true则当成百分比处理
-             * @return {*}
-             */
-            var currentTime = function (num, percentage) {
-                if (!num)return audio.currentTime;
-                if (percentage) {
-                    audio.currentTime = audio.duration * (num / 100);
-                } else {
-                    audio.currentTime = num;
-                }
-                return;
-            }
+	/**
+	 * 设置当前播放时间             若不传参数则为获取当前时间
+	 * @param num                 设置秒数
+	 * @param isPercentage        若为true 将对num / 100 处理, 用来表示num 传入的是一个百分比 (注:没有%)
+	 * @return {*|Number|number}
+	 */
+	ap.currentTime = function(num,isPercentage){
+		if(!_this.canplay ){return}
+		if(typeof num === 'undefined') return _this.audio.duration
+		_this.audio.currentTime  = isPercentage ?  Math.floor(_this.audio.duration * (num / 100)) : num
+		$(w).trigger('audioTimeChange',_this.audio)
+	}
 
-            init();
+	/**
+	 * 切换静音状态
+	 */
+	ap.toggleMute = function(){
+		_this.audio.volume === 0 ? _this.unMute() : _this.mute()
+	}
 
-            return {
-                audio: audio,
-                load: load,
-                pause: pause,
-                play: play,
-                togglePlay: togglePlay,
-                currentTime: currentTime,
-                volume: volume,
-                mute: mute,
-                unMute: unMute,
-                toggleMute: toggleMute
-            }
-        }
-    });
-})();
+	/**
+	 * 关闭静音
+	 */
+	ap.unMute = function(){
+		if(!_this.canplay ){return}
+		_this.audio.volume = _this.beforMute
+		$(w).trigger('audioUnMute',_this.beforMute)
+	}
+
+	/**
+	 * 静音操作
+	 */
+	ap.mute = function(){
+		if(!_this.canplay ){return}
+		_this.beforMute = _this.audio.volume
+		_this.audio.volume = 0
+		$(w).trigger('audioMute')
+	}
+
+	/**
+	 * 设置音量                   若不传参数则为获取音量
+	 * @param num [0,1]          数字,表示音量
+	 * @param isPercentage       若为true 将对num / 100 处理, 用来表示num 传入的是一个百分比 (注:没有%)
+	 * @return {audio.volume|*|number|Number}
+	 */
+	ap.volume = function(num,isPercentage){
+		if(!_this.canplay ){return}
+		if(typeof num === 'undefined') return _this.audio.volume
+		_this.audio.volume = isPercentage ? num / 100 : num
+		$(w).trigger('audioVolumeChange',_this.audio)
+	}
+
+	/**
+	 * 切换音频播放暂停
+	 */
+	ap.togglePlay = function(){
+		_this.audio.paused ? _this.play() : _this.pause()
+	}
+
+	/**
+	 * 音频暂停
+	 */
+	ap.pause = function(){
+		if(!_this.canplay ){return}
+		_this.audio.pause()
+		$(w).trigger('audioPause',_this.audio)
+		clearInterval(_this.intervalFn)
+	}
+
+	/**
+	 * 音频播放
+	 */
+	ap.play = function(){
+		if(!_this.canplay ){return}
+		_this.audio.play()
+		$(w).trigger('audioPlay',_this.audio)
+		_this.createInterval()
+	}
+
+	/**
+	 * 给audio绑定一些事件
+	 */
+	ap.init = function(){
+		//  开始加载事件绑定
+		$(this.audio).on('loadstart',function(){
+			$(w).trigger('audioLoadStart')
+		})
+
+		//  音频播放结束
+		$(this.audio).on('ended',function(){
+			$(w).trigger('audioEnded')
+			clearInterval(_this.intervalFn)
+		})
+
+	}
+
+	/**
+	 * 初始化加载音频
+	 * @param src
+	 * @param isAutoPlay
+	 */
+	ap.loadAudio = function(src,isAutoPlay){
+		//  清除定时器
+		_this.intervalFn && clearInterval(_this.intervalFn)
+		_this.canplay = false
+
+		$(_this.audio).one('canplay ',function(){
+			_this.canplay = true
+			$(w).trigger('audioLoadEnd',_this.audio)
+			isAutoPlay && _this.play()
+		})
+
+		_this.audio.src = _this.src = src
+	}
+
+	/**
+	 * 创建监听器
+	 */
+	ap.createInterval = function(){
+		this.intervalFn = setInterval(function(){
+			$(w).trigger('audioWatching',{
+				currentTime:_this.audio.currentTime,
+				duration:_this.audio.duration,
+				ended:_this.audio.ended,
+				percentage:(Math.trunc(_this.audio.currentTime) / Math.trunc(_this.audio.duration)) * 100
+			})
+		},_this.options.frequency)
+	}
+
+
+	$.extend({
+		'audio':function(src,options){
+			options = options ? options : {}
+			if(typeof src === "string"){
+				options.src = src
+			}
+			if(typeof src === "object"){
+				options = src
+			}
+			new audio(options)
+		}
+	})
+})(window,$)
