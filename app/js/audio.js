@@ -38,6 +38,11 @@
 		}
 	}
 
+	//  获取百分比
+	function getPercentage(num1,num2){
+		return (Math.trunc(num1) / Math.trunc(num2)) * 100
+	}
+
 	var ap = audio.prototype
 
 	/**
@@ -50,7 +55,10 @@
 		if(!_this.canplay ){return}
 		if(typeof num === 'undefined') return _this.audio.duration
 		_this.audio.currentTime  = isPercentage ?  Math.floor(_this.audio.duration * (num / 100)) : num
-		$(w).trigger('audioTimeChange',_this.audio)
+		$(w).trigger('audioTimeChange',{
+			currentTime:_this.audio.currentTime,
+			currentTimePercentage:getPercentage(_this.audio.currentTime,_this.audio.duration)
+		})
 	}
 
 	/**
@@ -89,7 +97,10 @@
 		if(!_this.canplay ){return}
 		if(typeof num === 'undefined') return _this.audio.volume
 		_this.audio.volume = isPercentage ? num / 100 : num
-		$(w).trigger('audioVolumeChange',_this.audio)
+		$(w).trigger('audioVolumeChange',{
+			volume:_this.audio.volume,
+			volumePercentage:_this.audio.volume * 100
+		})
 	}
 
 	/**
@@ -138,8 +149,8 @@
 
 	/**
 	 * 初始化加载音频
-	 * @param src
-	 * @param isAutoPlay
+	 * @param src             音频地址
+	 * @param isAutoPlay      是否自动播放
 	 */
 	ap.loadAudio = function(src,isAutoPlay){
 		//  清除定时器
@@ -164,7 +175,7 @@
 				currentTime:_this.audio.currentTime,
 				duration:_this.audio.duration,
 				ended:_this.audio.ended,
-				percentage:(Math.trunc(_this.audio.currentTime) / Math.trunc(_this.audio.duration)) * 100
+				percentage:getPercentage(_this.audio.currentTime,_this.audio.duration)
 			})
 		},_this.options.frequency)
 	}
