@@ -22,6 +22,17 @@
 		this.options = $.extend(defaults,options)
 
 		this.init()
+
+
+		//  移动端处理(移动端默认不会自动播放)
+		if(this.isMobile()){
+			$(document).one('touchstart click',function(){
+				console.log('加载音频');
+				var BugAudio = new Audio()
+				BugAudio.src = _this.options.src
+			})
+		}
+
 		this.loadAudio(this.options.src,this.options.autoPlay)
 		
 		//  赋值全局方法
@@ -164,6 +175,20 @@
 		})
 
 		_this.audio.src = _this.src = src
+	}
+
+	/**
+	 * 检测是否为手机
+	 * @return {boolean}
+	 */
+	ap.isMobile = function () {
+		var ua = navigator.userAgent
+		var isAndroid = /Android/i.test(ua)
+		var isIOS = /iPhone|iPad|iPod/i.test(ua)
+		var isMobile = isAndroid || isIOS
+		if (isAndroid) isMobile = 'android'
+		if (isIOS) isMobile = 'IOS'
+		return isMobile
 	}
 
 	/**
