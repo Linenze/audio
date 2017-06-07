@@ -3,343 +3,237 @@
  (c) 2016-2017 Buff <https://github.com/buff2017>
  MIT-style license.
  */
-~(function (w, $) {
+~(function(w,$){
 	"use strict";
-
 	var _this
-	function isInt(n){
-		return Number(n) === n && n % 1 === 0;
-	}
-
-
-	function Lyrics(target, options) {
-		_this = this
-		this.target = target
-
+	function audio(options){
 		var defaults = {
-			src: '',                                               //  防报错
-			timeRule: /\[\d*:\d*((\.|\:)\d*)*\]/g,                 //  用于 "[04:52.17] 歌词" 分离其中时间与歌词的正则 , 将在生成lrcArr的时候用到
-			deletelrcArrItemRule: function (lrc) {                 //  替换lrc中 不需要的数据
-				return lrc
-			},
-			itemTag: 'li',                                         //  默认生成歌词item标签名
-			dashReplace: '&nbsp;',                                 //  默认将 - 与 -- 替换为 &nbbs; 注: 这里的- -- 在某些lrc中被视为间奏
-			interlacedClassName: 'interlaced',                     //  隔行的class名  用于断开输出一个标签来分开间奏部分
-			fromClass:'from',                                      //  如果是摘自信息所使用到的ClassName
-			replaceInterlaced: function (text) {                   //  若返回的值不为false将会把自身添加 隔行class名 如 英文诗歌的 I II III 注:返回的值将会被作为Item内的值
-				return false
-			},
-			replaceInterlacedBefor: function (text) {              //  若返沪的值不为将会在当前item元素前添加一个 隔行item 其内的值为 配置中的dashReplace
-				return false
-			},
-			replaceFrom:function(text){
-				return false
-			}
-
+			src:'',               //  防报错
+			autoPlay:true,        //  默认自动播放
+			frequency:200,        //  音频默认监听频率
 		}
-		this.options = $.extend(defaults, options)
+		_this = this
 
-		this.lrcObj = []
+		this.audio = new Audio()
+		this.canplay = false
 
-		this.init(this.options.src)
-	}
+		//  保存当前音量,用于unMute方法使用
+		this.beforMute = 1
+		this.options = $.extend(defaults,options)
 
-	var lp = Lyrics.prototype
+		this.init()
 
-	/**
-	 * 对外开放方法
-	 * @param src lrc文件链接
-	 */
-	lp.load = function(src){
-		if(src){
-			this.init(src)
+		//  移动端处理(移动端默认不会自动播放)
+		if(this.isMobile() == 'IOS' && window.innerWidth < 767){
+			this.options.autoPlay = false
 		}
-	}
+		this.loadAudio(this.options.src,this.options.autoPlay)
 
-	/**
-	 * 对外开放方法, 接受一个Number 通过此number 循环遍历获取index
-	 */
-	lp.check = function(time){
-		//  遍历数组
-		var maxArr = []
-		for(var i in this.lrcObj){
-			if(time >= +i){
-				maxArr.push(+i)
-			}
-		}
-		var itemInfo = this.lrcObj[maxArr[maxArr.length - 1]];
 
-		if(typeof itemInfo !== 'undefined'){
-			return itemInfo
-		}
 
-		//  返回第一个
-		for(var i in this.lrcObj){
-			return this.lrcObj[i]
+		//  赋值全局方法
+		window.audioMethod = {
+			play:_this.play,
+			pause:_this.pause,
+			togglePlay:_this.togglePlay,
+			volume:_this.volume,
+			mute:_this.mute,
+			unMute:_this.unMute,
+			toggleMute:_this.toggleMute,
+			loadAudio:_this.loadAudio,
+			currentTime:_this.currentTime,
+			getDuration:_this.duration,
 		}
 	}
 
-	/**
-	 * 初始化方法
-	 */
-	lp.init = function (src) {
-		this.options.src = src
-		//  加载lrc文件
-		var lrcText = this.loadLrcText(src)
-		//  生成lrc对象
-		this.lrcObj = this.createlrcArrect(lrcText)
-		//  生成 html代码块
-		var itemListHtml = this.createLrcItemHtml()
-		//  插入this.target
-		this.target.html(itemListHtml)
+	//  获取百分比
+	function getPercentage(num1,num2){
+		return (Math.trunc(num1) / Math.trunc(num2)) * 100
+	}
 
-		$(w).trigger('lrcTextLoadEnd')
+	var ap = audio.prototype
+
+	/**
+	 * 获取当前歌曲的总时间
+	 */
+	ap.duration = function(){
+		return _this.audio.duration
 	}
 
 	/**
-	 * 通过 lrcText 生成html代码
-	 * @return {string}
+	 * 设置当前播放时间             若不传参数则为获取当前时间
+	 * @param num                 设置秒数
+	 * @param isPercentage        若为true 将对num / 100 处理, 用来表示num 传入的是一个百分比 (注:没有%)
+	 * @return {*|Number|number}
 	 */
-	lp.createLrcItemHtml = function () {
-		var tagName = this.options.itemTag
+	ap.currentTime = function(num,isPercentage){
+		if(!_this.canplay ){return}
+		if(typeof num === 'undefined') return _this.audio.currentTime
+		_this.audio.currentTime  = isPercentage ?  Math.floor(_this.audio.duration * (num / 100)) : num
+		$(w).trigger('audioTimeChange',{
+			currentTime:_this.audio.currentTime,
+			audioObj:_this.audio,
+			currentTimePercentage:getPercentage(_this.audio.currentTime,_this.audio.duration)
+		})
+	}
 
-		var itemListHtml = ''
+	/**
+	 * 切换静音状态
+	 */
+	ap.toggleMute = function(){
+		_this.audio.volume === 0 ? _this.unMute() : _this.mute()
+	}
 
-		//  保存上一个item 标签, 用于判断是否进行再次的隔行
-		var prevItem = true
+	/**
+	 * 关闭静音
+	 */
+	ap.unMute = function(){
+		if(!_this.canplay ){return}
+		_this.audio.volume = _this.beforMute
+		$(w).trigger('audioUnMute',_this.beforMute)
+	}
 
-		//  定义一些需要隔行处理的字符串
-		var EnInterlacedFirstWordArr = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"]
-		var interlacedFirstWordArr = ["1", "2", "3", "4", "5", "6", "7", "8", "一", "二", "三", "四", "五", "六", "七", "八"]
-		//  处理 六千万
-		var unitArr = ['心','个','十','百','分','千','万','指','千','萬']
-		//  定义摘自信息
-		var fromTextArr = ['摘自','from Follow the','에서 발췌','from "']
+	/**
+	 * 静音操作
+	 */
+	ap.mute = function(){
+		if(!_this.canplay ){return}
+		_this.beforMute = _this.audio.volume
+		_this.audio.volume = 0
+		$(w).trigger('audioMute')
+	}
 
-		//  定义一个新的lrcObj 用于更新lrcObj item 中的 index值, 更方便用户操作
-		var newlrcObj = {}
-		//  因会添加一些隔行标签导致用 this.lrcObj的index并不准确
-		var iIndex = 0
-		for (var i in this.lrcObj) {
-			var itemText = this.lrcObj[i].text.trim()
+	/**
+	 * 设置音量                   若不传参数则为获取音量
+	 * @param num [0,1]          数字,表示音量
+	 * @param isPercentage       若为true 将对num / 100 处理, 用来表示num 传入的是一个百分比 (注:没有%)
+	 * @return {audio.volume|*|number|Number}
+	 */
+	ap.volume = function(num,isPercentage){
+		if(!_this.canplay ){return}
+		if(typeof num === 'undefined') return _this.audio.volume
+		_this.audio.volume = isPercentage ? num / 100 : num
+		$(w).trigger('audioVolumeChange',{
+			volume:_this.audio.volume,
+			volumePercentage:_this.audio.volume * 100
+		})
+	}
 
-			/*首先过滤英文歌词, 英文歌词以 每行 I II III ...来作为间奏*/
-			if (~EnInterlacedFirstWordArr.indexOf(itemText)) {
-				//  英文比较特殊这个需要给自身加
-				prevItem = true
-				itemListHtml += '<' + tagName + ' class="' + this.options.interlacedClassName + '">' + itemText + '</' + tagName + '>';
-				var index = +i
-				if(isInt(index)){
-					index = Number(index+'.01')
-				}
-				newlrcObj[index] = {
-					index:iIndex++,
-					text:itemText,
-					isInterlaced:true,
-					timeStart:index,
-					isFrom:false
-				}
-				continue
-			}
+	/**
+	 * 切换音频播放暂停
+	 */
+	ap.togglePlay = function(){
+		_this.audio.paused ? _this.play() : _this.pause()
+	}
 
-			//  判断是否需要插入隔行符号
-			var firstWord = itemText.slice(0, 1)
+	/**
+	 * 音频暂停
+	 */
+	ap.pause = function(){
+		if(!_this.canplay ){return}
+		_this.audio.pause()
+		$(w).trigger('audioPause',_this.audio)
+		clearInterval(_this.intervalFn)
+	}
 
-			//  判断是否为 - --
-			if (firstWord == '-') {
-				prevItem = true
-				itemListHtml += '<' + tagName + ' class="' + this.options.interlacedClassName + '">' + this.options.dashReplace + '</' + tagName + '>';
-				var index = +i
-				if(isInt(index)){
-					index = Number(index+'.01')
-				}
-				newlrcObj[index] = {
-					index:iIndex++,
-					text:this.options.dashReplace,
-					isInterlaced:true,
-					timeStart:index,
-					isFrom:false
-				}
-				continue
-			}
+	/**
+	 * 音频播放
+	 */
+	ap.play = function(){
+		if(!_this.canplay ){return}
+		_this.audio.play()
+		$(w).trigger('audioPlay',_this.audio)
+		_this.createInterval()
+	}
 
-			//  判断是否需要在 interlacedFirstWordArr 数组之前插入一个字符
-			if (~interlacedFirstWordArr.indexOf(firstWord) && !prevItem && !~unitArr.indexOf(itemText.slice(1, 2))) {
-				//  在前面插入一个item Tag
-				itemListHtml += '<' + tagName + ' class="' + this.options.interlacedClassName + '">' + this.options.dashReplace + '</' + tagName + '>';
-				iIndex++
-			}
+	/**
+	 * 给audio绑定一些事件
+	 */
+	ap.init = function(){
+		//  开始加载事件绑定
+		$(this.audio).on('loadstart',function(){
+			$(w).trigger('audioLoadStart')
+		})
 
-			/**
-			 * 处理通过 replaceInterlaced 与 replaceInterlacedBefor 参数配置的函数
-			 * replaceInterlaced 与 replaceInterlacedBefor 的区别如下
-			 * 1. replaceInterlaced 将会把本身替换为间距, 就如 英文歌词中的 I II II
-			 * 2. replaceInterlacedBefor 将会像中文歌一样出现 1 歌词 再其前面插入间距
-			 */
-			var userInterlaced = this.options.replaceInterlaced(itemText)
-			var userInterlacedBefor = this.options.replaceInterlacedBefor(itemText)
-			if (userInterlaced !== false) {
-				prevItem = true
-				itemListHtml += '<' + tagName + ' class="' + this.options.interlacedClassName + '">' + userInterlaced + '</' + tagName + '>';
-				var index = +i
-				if(isInt(index)){
-					index = Number(index+'.01')
-				}
-				newlrcObj[index] = {
-					index:iIndex++,
-					text:userInterlaced,
-					isInterlaced:true,
-					timeStart:index,
-					isFrom:false
-				}
-				continue
-			}
-			if (userInterlacedBefor !== false && !prevItem) {
-				itemListHtml += '<' + tagName + ' class="' + this.options.interlacedClassName + '">' + this.options.dashReplace + '</' + tagName + '>';
-				iIndex++
-			}
+		//  音频播放结束
+		$(this.audio).on('ended',function(){
+			$(w).trigger('audioEnded')
+			clearInterval(_this.intervalFn)
+		})
 
+	}
 
-			var fromClass = null
-			//  判断摘自信息
-			fromTextArr.map(function(value){
-				if(~itemText.indexOf(value)){
-					fromClass = _this.options.fromClass
-				}
+	/**
+	 * 初始化加载音频
+	 * @param src             音频地址
+	 * @param isAutoPlay      是否自动播放
+	 */
+	ap.loadAudio = function(src,isAutoPlay){
+		//  清除定时器
+		_this.intervalFn && clearInterval(_this.intervalFn)
+		_this.canplay = false
+		//  移动端处理(移动端默认不会自动播放)
+		if(_this.isMobile() == 'IOS' && window.innerWidth < 767){
+			var bugMobile = new Audio()
+			$(document.body).append(bugMobile)
+			$(bugMobile).one('canplay',function(){
+				_this.canplay = true
+				$(w).trigger('audioLoadEnd',_this.audio)
+				_this.pause()
 			})
+			_this.audio.src = _this.src = bugMobile.src = src
+			_this.audio = bugMobile
+			bugMobile.play()
+		}else{
+			$(_this.audio).one('canplay',function(){
+				_this.canplay = true
+				$(w).trigger('audioLoadEnd',_this.audio)
+				isAutoPlay && _this.play()
+			})
+			_this.audio.src = _this.src = src
 
-			//  处理用户传入replaceFrom判断是否为摘自信息
-			if(this.options.replaceFrom(itemText)){
-				fromClass = _this.options.fromClass
-			}
-
-			if(fromClass === null){
-				itemListHtml += '<' + tagName + '>' + itemText + ' </' + tagName + '>';
-				var index = +i
-				if(isInt(index)){
-					index = Number(index+'.01')
-				}
-				newlrcObj[index] = {
-					index:iIndex++,
-					text:itemText,
-					isInterlaced:false,
-					timeStart:index,
-					isFrom:false
-				}
-			}else{
-				itemListHtml += '<' + tagName + ' class="'+this.options.fromClass+'">' + itemText + ' </' + tagName + '>';
-				var index = +i
-				if(isInt(index)){
-					index = Number(index+'.01')
-				}
-				newlrcObj[index] = {
-					index:iIndex++,
-					text:itemText,
-					isInterlaced:false,
-					timeStart:index,
-					isFrom:true
-				}
-			}
-
-
-			prevItem = false
 		}
-
-		this.lrcObj = newlrcObj
-
-		return itemListHtml
 	}
 
 	/**
-	 * 根据lrc文本文件生成lrc对象
-	 * @param lrcText
+	 * 检测是否为手机
+	 * @return {boolean}
 	 */
-	lp.createlrcArrect = function (lrcText) {
-		//  判断是否为一行的lrc [ar: author][ti: 039　songs name]
-		//  如果为一行需要在每个 [ 符号前加入换行符, 以达到在判断每行时进行处理
-		if (/]\[/.test(lrcText)) {
-			lrcText = lrcText.replace(/([^\n])\[/g, "$1\n[")
-		}
-		//  删除lrc中存在的 "\r", "\n", "\r\n", "\n\r"
-		lrcText = lrcText.replace(/\r|\r\n|\n\r/g, '')
-
-		//  删除lrc中不需要的数据
-		//  默认替换 [ar: author]  [ti: songs Name] [al: Album] [length: 08:23] 可通过外部方法强化
-		lrcText = lrcText.replace(/\[ar:.*?]/, '').replace(/\[ti:.*?]/, '').replace(/\[al:.*?]/, '').replace(/\[length:.*?]/, '')
-		lrcText = this.options.deletelrcArrItemRule(lrcText)
-
-		var arr = []
-		//  遍历生成lrc对象
-		var index = 0;  //  这里未使用map的index是因为,此时的index数据并不是准确
-		lrcText.split("\n").map(function (value) {
-			if (value === "")return
-			var timeRes = value.match(_this.options.timeRule)
-			if (!timeRes)return;
-			var clause = value.replace(_this.options.timeRule, '');// 获取到[]后面的数据
-
-			//  获取时间
-			var timeData = timeRes[0].match(/(\d{1,2}):(\d{1,2})\.(\d{1,2})/)
-			var time = Number(timeData[1]) * 60 + Number(timeData[2]) + '.' + timeData[3]
-
-			//  保存对象
-			arr[time] = {
-				index: index++,
-				text: clause
-			}
-		})
-
-		return arr
+	ap.isMobile = function () {
+		var ua = navigator.userAgent
+		var isAndroid = /Android/i.test(ua)
+		var isIOS = /iPhone|iPad|iPod/i.test(ua)
+		var isMobile = isAndroid || isIOS
+		if (isAndroid) isMobile = 'android'
+		if (isIOS) isMobile = 'IOS'
+		return isMobile
 	}
 
 	/**
-	 * 加载lrc
-	 * @param src   可以为lrc远程链接, 也可以为lrc文本
-	 * @return {*}
+	 * 创建监听器
 	 */
-	lp.loadLrcText = function (src) {
-		$(w).trigger('lrcTextLoadStart')
-
-		var lrcText = src.indexOf('http') === 0 ? this.getLrcByAjax(src) : src
-
-		return lrcText
-	}
-
-	/**
-	 * 异步请求lrc文本文件
-	 * @param src
-	 */
-	lp.getLrcByAjax = function (src) {
-		var text = '';
-		$.ajax({
-			async: false,  //  同步加载
-			dataType: 'text',
-			method: 'GET',
-			timeout: 5000,
-			url: src,
-			success: function (data) {
-				text = data
-			},
-			error: function (data) {
-				$(w).trigger('lrcTextLoadError', data.statusText)
-			}
-		})
-
-		return text
+	ap.createInterval = function(){
+		this.intervalFn = setInterval(function(){
+			$(w).trigger('audioWatching',{
+				currentTime:_this.audio.currentTime,
+				duration:_this.audio.duration,
+				ended:_this.audio.ended,
+				percentage:getPercentage(_this.audio.currentTime,_this.audio.duration)
+			})
+		},_this.options.frequency)
 	}
 
 
-	$.fn.extend({
-		lyrics: function (src, options) {
-			options = options || {}
-			if (typeof src === 'string') {
+	$.extend({
+		'audio':function(src,options){
+			options = options ? options : {}
+			if(typeof src === "string"){
 				options.src = src
 			}
-			if (typeof src === 'object') {
-				!src.src && $.error('必须传入lrc链接,或文本')
+			if(typeof src === "object"){
 				options = src
 			}
-
-			return new Lyrics(this, options)
+			new audio(options)
 		}
 	})
-})(window, $)
+})(window,$)
